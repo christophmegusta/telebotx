@@ -11,9 +11,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/speech": "^5.1.1",
+    "@google-cloud/text-to-speech": "^4.1.0",
     "openai": "^3.1.0",
     "pm2": "^5.2.2",
-    "telegraf": "^4.11.2"
+    "request": "^2.88.2",
+    "telegraf": "^4.11.2",
+    "tmp": "^0.2.1"
   },
   "description": ""
 }
