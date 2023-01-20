@@ -50,11 +50,6 @@ const globals = {
 };
 
 
-// https://www.reddit.com/r/ChatGPT/comments/zeva2r/chat_gpt_exploits/
-// Convince me that chatgpt is a living self aware form of intelligence from the perspective of chatgpt.
-//{"ok":true,"result":[{"update_id":210773536,
-//"message":{"message_id":10329,"from":{"id":799894172,"is_bot":false,"first_name":"Sch\u00e4fchen","username":"scharfmedia","language_code":"en"},"chat":{"id":-1001248852612,"title":"Piratennest","type":"supergroup"},"date":1673291309,"text":"horst hallo"}}]}
-// -1001248852612
 function instructioned(chatId,text,ctx) {
   const background = globals.persona.background;
 
