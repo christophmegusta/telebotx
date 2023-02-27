@@ -12,9 +12,9 @@ const speech = require('./speech.js');
 // environment vars
 const hostname = process.env['HOST'] || '0.0.0.0';
 const port = process.env['PORT'] || 8080;
-const OPENAI_API_KEY = process.env['OPENAI_API_KEY'] = process.env['OPENAI_API_KEY'] || false;
-const TELEGRAM_BOT_API_KEY = process.env['TELEGRAM_BOT_API_KEY'] = process.env['TELEGRAM_BOT_API_KEY'] || false;
-const GOOGLE_APPLICATION_CREDENTIALS = process.env['GOOGLE_APPLICATION_CREDENTIALS'] = process.env['GOOGLE_APPLICATION_CREDENTIALS'] || false;
+const OPENAI_API_KEY = process.env['OPENAI_API_KEY'];
+const TELEGRAM_BOT_API_KEY = process.env['TELEGRAM_BOT_API_KEY'];
+const GOOGLE_APPLICATION_CREDENTIALS = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
 
 if( !OPENAI_API_KEY ) {
   console.log("OPENAI_API_KEY environment var is not set! exiting...");
@@ -25,7 +25,7 @@ if( !TELEGRAM_BOT_API_KEY ) {
   return process.exit(1);
 }
 if( !GOOGLE_APPLICATION_CREDENTIALS ) {
-  console.log("GOOGLE_APPLICATION_CREDENTIALS environment var is not set! speech2text functionality might be disabled if Whisper isnt working...");
+  console.log("GOOGLE_APPLICATION_CREDENTIALS environment var is not set! speech2text functionality might be disabled if Whisper isnt locally installed via python...");
 }
 
 
@@ -39,6 +39,7 @@ const personas = require("./personas.js");
 const globals = {
   lastMessage: new Date(),
   lastChannel: 0,
+  reviver: 0,
   delay: 30,
   speech2text: 1,
   parrot: 1,
@@ -85,25 +86,44 @@ function formatChatHistory(chatId,tpl) {
 // try to revive a boring channel by periodically let bot write messages
 // to encourage people to engage
 let reviverId = setInterval(async function() {
-  try {
-    let now = new Date();
-    let last = globals.lastMessage;
-    let nowM = Math.floor(now.getTime() / 60000);
-    let lastM = Math.floor(last.getTime() / 60000);
-    let timeDiff = nowM - lastM;
+  if( globals.reviver == 1 ) {
+    try {
+        let now = new Date();
+        let last = globals.lastMessage;
+        let nowM = Math.floor(now.getTime() / 60000);
+        let lastM = Math.floor(last.getTime() / 60000);
+        let timeDiff = nowM - lastM;
 
-    console.log("last message was ("+nowM+" - "+lastM+" =)" + timeDiff + " minutes ago - globals.delay is set to " + globals.delay + " and lastChannel = " + globals.lastChannel);
-    if(timeDiff > globals.delay && globals.lastChannel != 0 ) {
-      console.log("revive channel",globals.lastChannel);
-      await sendAiMessageResponse(globals.lastChannel,"was macht ihr alle?",null);
-      globals.lastMessage = new Date();
-      globals.delay = Math.floor(Math.random() * (480 - 60 + 1) + 60); // 60min to 8h
-      console.log("revived!");
+        console.log("last message was ("+nowM+" - "+lastM+" =)" + timeDiff + " minutes ago - globals.delay is set to " + globals.delay + " and lastChannel = " + globals.lastChannel);
+        if(timeDiff > globals.delay && globals.lastChannel != 0 ) {
+          console.log("revive channel",globals.lastChannel);
+          await sendAiMessageResponse(globals.lastChannel,"was macht ihr alle?",null);
+          globals.lastMessage = new Date();
+          globals.delay = Math.floor(Math.random() * (480 - 60 + 1) + 60); // 60min to 8h
+          console.log("revived!");
+        }
+    } catch(err) {
+      console.error(err);
     }
-  } catch(err) {
-    console.error(err);
   }
 
+  // abuse this interval to keep app alive when running on heroku
+  // https.get('https://WAAAAAATHERE.herokuapp.com/', (resp) => {
+  //   let data = '';
+
+  //   // A chunk of data has been received.
+  //   resp.on('data', (chunk) => {
+  //     data += chunk;
+  //   });
+
+  //   // The whole response has been received. Print out the result.
+  //   resp.on('end', () => {
+  //     console.log("are we awake? ", data.trim() == "henlo" ? true : false);
+  //   });
+
+  // }).on("error", (err) => {
+  //   console.log("Error: " + err.message);
+  // });
 }, 300*1000); // every 5 minutes aka 300 secs
 
 
@@ -167,7 +187,7 @@ bot.on('voice', async ctx => {
 
     const botsmsg = await sendAiMessageResponse(ctx.message.chat.id,text,ctx);
     if( globals.voice == 1 && (text.toLowerCase().indexOf("sprich") >= 0 || text.toLowerCase().indexOf("spreche") >= 0 || text.toLowerCase().indexOf("sag") >= 0 || text.toLowerCase().indexOf("erzähl") >= 0)  ) {
-      const audioContent = await speech.text2speech(botsmsg);
+      const audioContent = await speech.text2speech(botsmsg,globals.persona.parameters?.google_voice_model||null, globals.persona.parameters?.google_voice_pitch||null, globals.persona.parameters?.google_voice_rate||null);
       ctx.replyWithVoice({source:audioContent});
     }
 
@@ -278,7 +298,7 @@ bot.on('text', async (ctx) => {
     const botsmsg = await sendAiMessageResponse(ctx.message.chat.id, message, ctx);
     if( !botsmsg ) return;
     if( globals.voice == 1 && (message.toLowerCase().indexOf("sprich") >= 0 || message.toLowerCase().indexOf("spreche") >= 0 || message.toLowerCase().indexOf("sag") >= 0 || message.toLowerCase().indexOf("erzähl") >= 0) ) {
-      const audioContent = await speech.text2speech(botsmsg);
+      const audioContent = await speech.text2speech(botsmsg,globals.persona.parameters?.google_voice_model||null, globals.persona.parameters?.google_voice_pitch||null, globals.persona.parameters?.google_voice_rate||null);
       ctx.replyWithVoice({source:audioContent});
     }
 
@@ -296,6 +316,17 @@ bot.on('text', async (ctx) => {
 
 
 async function sendAiMessageResponse(chatId, message, ctx) {
+  try {
+    return await sendAiMessageResponseX(chatId, message, ctx);
+  }
+  catch( error ) {
+    console.log(error);
+    console.log("try sendAiMessageResponse() again after first error...");
+    return await sendAiMessageResponseX(chatId, message, ctx);
+  }
+}
+
+async function sendAiMessageResponseX(chatId, message, ctx) {
   let msg = null;
   msg = message.toLowerCase().indexOf("horst") == 0 ? message.substring(message.length).trim() : message;
   msg = message.toLowerCase().indexOf("ashley") == 0 ? message.substring(message.length).trim() : message;
@@ -352,6 +383,8 @@ async function sendAiMessageResponse(chatId, message, ctx) {
     } else {
       console.error("An error occurred during OpenAI request", error);
     }
+
+    throw error;
   }
 
   return buf;//

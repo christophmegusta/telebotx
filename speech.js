@@ -5,7 +5,8 @@ const {TextToSpeechClient} = require('@google-cloud/text-to-speech');
 //const ps = require('pocketsphinx').ps;
 
 
-module.exports.text2speech = async function(message) {
+module.exports.text2speech = async function(message, model, pitch, rate) {
+  console.log("voice model ",model, "voice pitch ", pitch, "voice rate ", rate);
     // Creates a client
     // https://cloud.google.com/text-to-speech
     const client = new TextToSpeechClient();
@@ -14,9 +15,9 @@ module.exports.text2speech = async function(message) {
     const request = {
         input: {text: message},
         // Select the language and SSML voice gender (optional)
-        voice: {languageCode: 'de-DE', "name": "de-DE-Neural2-F"},//ssmlGender: 'FEMALE',
+        voice: {languageCode: 'de-DE', "name": model||'de-DE-Neural2-F'},//ssmlGender: 'FEMALE',
         // Select the type of audio encoding
-        audioConfig: {audioEncoding: 'MP3', "pitch": 0.0, "speakingRate": 1}, //model: "waveform", 
+        audioConfig: {audioEncoding: 'MP3', "pitch": pitch||0.0, "speakingRate": rate||1}, //model: "waveform", pitch -20 to 20
     };
 
     // Performs the text-to-speech request
